@@ -53,6 +53,51 @@ def get_current_time_info():
 def home():
     return render_template('index.html')
 
+@app.route('/get-models', methods=['GET'])
+def get_models():
+    try:
+        # 创建 OpenAI 客户端
+        client = OpenAI(
+            api_key=DEFAULT_API_KEY,
+            base_url="https://api.openai.com/v1"
+        )
+        
+        # 获取模型列表
+        models = client.models.list()
+        
+        # 只保留 GPT-4.1 和 GPT-4o 的对话模型
+        gpt_models = {}
+        
+        # 筛选 GPT-4.1 和 GPT-4o 的最新版本
+        gpt41_models = []
+        gpt4o_models = []
+        
+        for model in models.data:
+            model_id = model.id
+            # 只保留对话模型（不包含 vision, embedding, instruct 等特殊用途模型）
+            if ('gpt-4.1' in model_id.lower() and not any(x in model_id.lower() for x in ['vision', 'embedding'])):
+                gpt41_models.append(model_id)
+            elif ('gpt-4o' in model_id.lower() and not any(x in model_id.lower() for x in ['vision', 'embedding'])):
+                gpt4o_models.append(model_id)
+        
+        # 添加 GPT-4.1 的最新版本（如果有）
+        if gpt41_models:
+            latest_gpt41 = sorted(gpt41_models)[-1]  # 获取按字母顺序排序的最后一个（通常是最新版本）
+            gpt_models[latest_gpt41] = "GPT-4.1"
+        
+        # 添加 GPT-4o 的最新版本（如果有）
+        if gpt4o_models:
+            latest_gpt4o = sorted(gpt4o_models)[-1]  # 获取按字母顺序排序的最后一个（通常是最新版本）
+            gpt_models[latest_gpt4o] = "GPT-4o"
+        
+        # 添加默认模型（以防找不到 GPT-4.1 和 GPT-4o）
+        if not gpt_models:
+            gpt_models["gpt-3.5-turbo"] = "GPT-3.5 Turbo"
+        
+        return jsonify(gpt_models)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/chat', methods=['POST'])
 def chat():
     try:
@@ -62,9 +107,6 @@ def chat():
 
         if not message:
             return jsonify({'error': '消息不能为空'}), 400
-
-        if model not in SUPPORTED_MODELS:
-            return jsonify({'error': f'不支持的模型：{model}'}), 400
 
         # 获取当前时间信息
         time_info = get_current_time_info()

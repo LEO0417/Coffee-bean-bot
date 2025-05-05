@@ -46,6 +46,24 @@
         .settings {
             margin-bottom: 20px;
         }
+        .refresh-button {
+            cursor: pointer;
+            color: #007bff;
+            margin-left: 10px;
+        }
+        .refresh-button:hover {
+            text-decoration: underline;
+        }
+        .model-container {
+            display: flex;
+            align-items: center;
+        }
+        .loading {
+            display: inline-block;
+            margin-left: 10px;
+            font-size: 14px;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -55,13 +73,15 @@
             <div id="datetime" class="text-center mb-3" style="color: #666;"></div>
             
             <div class="settings">
-                <div class="mb-3">
+                <div class="mb-3 model-container">
                     <label for="model" class="form-label">模型：</label>
-                    <select class="form-select" id="model">
+                    <select class="form-select" id="model" style="flex: 1;">
+                        <option value="gpt-4o">GPT-4o</option>
+                        <option value="gpt-4.1">GPT-4.1</option>
                         <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                        <option value="gpt-4">GPT-4</option>
-                        <option value="gpt-4-turbo">GPT-4 Turbo</option>
                     </select>
+                    <span class="refresh-button" onclick="refreshModels()">刷新模型列表</span>
+                    <span id="loading-indicator" class="loading" style="display: none;">加载中...</span>
                 </div>
             </div>
 
@@ -77,6 +97,62 @@
 
     <script>
         let lastBotMessage = '';
+
+        // 页面加载时获取模型列表
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshModels();
+        });
+
+        // 刷新模型列表
+        async function refreshModels() {
+            const loadingIndicator = document.getElementById('loading-indicator');
+            const modelSelect = document.getElementById('model');
+            const currentModel = modelSelect.value; // 保存当前选择的模型
+            
+            try {
+                loadingIndicator.style.display = 'inline-block';
+                
+                const response = await fetch('/get-models');
+                const models = await response.json();
+                
+                if (response.ok) {
+                    // 清空现有选项
+                    modelSelect.innerHTML = '';
+                    
+                    let foundCurrentModel = false;
+                    
+                    // 添加新的选项
+                    Object.entries(models).forEach(([modelId, displayName]) => {
+                        const option = document.createElement('option');
+                        option.value = modelId;
+                        option.textContent = displayName;
+                        
+                        // 如果是之前选择的模型，则设为选中
+                        if (modelId === currentModel) {
+                            option.selected = true;
+                            foundCurrentModel = true;
+                        }
+                        
+                        modelSelect.appendChild(option);
+                    });
+                    
+                    // 如果之前选择的模型不在列表中，默认选择第一个
+                    if (!foundCurrentModel && modelSelect.options.length > 0) {
+                        modelSelect.options[0].selected = true;
+                    }
+                    
+                    // 添加提示信息
+                    const timestamp = new Date().toLocaleTimeString();
+                    addMessage(`模型列表已更新 (${timestamp})`, false);
+                } else if (models.error) {
+                    addMessage('获取模型列表失败：' + models.error, false);
+                }
+            } catch (error) {
+                addMessage('获取模型列表出错：' + error.message, false);
+            } finally {
+                loadingIndicator.style.display = 'none';
+            }
+        }
 
         async function sendMessage() {
             const userInput = document.getElementById('userInput');
