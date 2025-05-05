@@ -1,5 +1,5 @@
 # 安装所需的包：
-# pip install flask openai python-dotenv borax
+# pip install flask openai python-dotenv borax requests
 from flask import Flask, render_template, request, jsonify, send_file
 from openai import OpenAI
 import os
@@ -7,20 +7,44 @@ from dotenv import load_dotenv
 from datetime import datetime
 import tempfile
 from borax.calendars.lunardate import LunarDate
+import requests
+import json
+import ollama
 
 # 加载环境变量
 load_dotenv()
 
 app = Flask(__name__)
 
-# 支持的模型列表
-SUPPORTED_MODELS = {
-    "gpt-3.5-turbo": "GPT-3.5 Turbo",
-    "gpt-4": "GPT-4",
-    "gpt-4-turbo": "GPT-4 Turbo"
-}
 # 从环境变量中获取 API 密钥
 DEFAULT_API_KEY = os.getenv("OPENAI_API_KEY")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")  # Ollama 默认地址
+
+class ModelProvider:
+    OPENAI = "openai"
+    OLLAMA = "ollama"
+
+# 支持的模型列表
+SUPPORTED_MODELS = {
+    ModelProvider.OPENAI: {
+        "gpt-3.5-turbo": "GPT-3.5 Turbo",
+        "gpt-4": "GPT-4",
+        "gpt-4-turbo": "GPT-4 Turbo"
+    },
+    ModelProvider.OLLAMA: {}  # 将通过 API 动态获取
+}
+
+def get_ollama_models():
+    """获取所有可用的 Ollama 模型"""
+    try:
+        response = requests.get(f"{OLLAMA_BASE_URL}/api/tags")
+        if response.status_code == 200:
+            models = response.json().get('models', [])
+            return {model['name']: model['name'].capitalize() for model in models}
+        return {}
+    except Exception as e:
+        print(f"获取 Ollama 模型失败：{str(e)}")
+        return {}
 
 def get_current_time_info():
     now = datetime.now()
@@ -56,47 +80,59 @@ def home():
 @app.route('/get-models', methods=['GET'])
 def get_models():
     try:
-        # 创建 OpenAI 客户端
+        # 获取 OpenAI 模型
         client = OpenAI(
             api_key=DEFAULT_API_KEY,
             base_url="https://api.openai.com/v1"
         )
         
-        # 获取模型列表
-        models = client.models.list()
+        openai_models = {}
+        try:
+            models = client.models.list()
+            for model in models.data:
+                model_id = model.id
+                if 'gpt' in model_id.lower():
+                    display_name = model_id.replace("-", " ").title()
+                    openai_models[model_id] = display_name
+        except Exception as e:
+            print(f"获取 OpenAI 模型失败：{str(e)}")
+            openai_models = SUPPORTED_MODELS[ModelProvider.OPENAI]
+
+        # 获取 Ollama 模型
+        ollama_models = get_ollama_models()
         
-        # 只保留 GPT-4.1 和 GPT-4o 的对话模型
-        gpt_models = {}
+        # 合并所有模型
+        all_models = {
+            ModelProvider.OPENAI: openai_models,
+            ModelProvider.OLLAMA: ollama_models
+        }
         
-        # 筛选 GPT-4.1 和 GPT-4o 的最新版本
-        gpt41_models = []
-        gpt4o_models = []
-        
-        for model in models.data:
-            model_id = model.id
-            # 只保留对话模型（不包含 vision, embedding, instruct 等特殊用途模型）
-            if ('gpt-4.1' in model_id.lower() and not any(x in model_id.lower() for x in ['vision', 'embedding'])):
-                gpt41_models.append(model_id)
-            elif ('gpt-4o' in model_id.lower() and not any(x in model_id.lower() for x in ['vision', 'embedding'])):
-                gpt4o_models.append(model_id)
-        
-        # 添加 GPT-4.1 的最新版本（如果有）
-        if gpt41_models:
-            latest_gpt41 = sorted(gpt41_models)[-1]  # 获取按字母顺序排序的最后一个（通常是最新版本）
-            gpt_models[latest_gpt41] = "GPT-4.1"
-        
-        # 添加 GPT-4o 的最新版本（如果有）
-        if gpt4o_models:
-            latest_gpt4o = sorted(gpt4o_models)[-1]  # 获取按字母顺序排序的最后一个（通常是最新版本）
-            gpt_models[latest_gpt4o] = "GPT-4o"
-        
-        # 添加默认模型（以防找不到 GPT-4.1 和 GPT-4o）
-        if not gpt_models:
-            gpt_models["gpt-3.5-turbo"] = "GPT-3.5 Turbo"
-        
-        return jsonify(gpt_models)
+        return jsonify(all_models)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+def chat_with_ollama(message, model_name, system_prompt):
+    """使用 Ollama Python 客户端进行对话"""
+    try:
+        # 设置 Ollama 客户端的主机
+        ollama.host = OLLAMA_BASE_URL
+        
+        # 使用 Ollama 客户端调用模型
+        response = ollama.chat(
+            model=model_name,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": message}
+            ]
+        )
+        
+        # 从响应中获取内容
+        if "message" in response and "content" in response["message"]:
+            return response["message"]["content"]
+        else:
+            return f"Ollama 响应格式不正确：{response}"
+    except Exception as e:
+        return f"调用 Ollama 失败：{str(e)}"
 
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -104,18 +140,13 @@ def chat():
         data = request.json
         message = data.get('message')
         model = data.get('model', 'gpt-3.5-turbo')
+        provider = data.get('provider', ModelProvider.OPENAI)
 
         if not message:
             return jsonify({'error': '消息不能为空'}), 400
 
         # 获取当前时间信息
         time_info = get_current_time_info()
-        
-        # 创建 OpenAI 客户端
-        client = OpenAI(
-            api_key=DEFAULT_API_KEY,
-            base_url="https://api.openai.com/v1"
-        )
         
         # 构建系统提示，包含时间信息
         system_prompt = f"""你是一位专业的咖啡顾问，熟悉各种咖啡豆、烘焙方法和冲泡技巧。
@@ -127,19 +158,28 @@ def chat():
 下午可以推荐享受下午茶时光的咖啡；
 晚上则推荐低因的温和咖啡。"""
 
-        # 注意：这里可以将 stream=True 参数添加到 API 调用以获得真正的流式响应
-        # 为了简单起见，我们目前保持非流式响应，让前端模拟流式效果
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": message}
-            ]
-        )
+        if provider == ModelProvider.OLLAMA:
+            # 使用 Ollama API
+            response_text = chat_with_ollama(message, model, system_prompt)
+            return jsonify({'response': response_text})
+        else:
+            # 使用 OpenAI API
+            client = OpenAI(
+                api_key=DEFAULT_API_KEY,
+                base_url="https://api.openai.com/v1"
+            )
+            
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": message}
+                ]
+            )
 
-        return jsonify({
-            'response': response.choices[0].message.content
-        })
+            return jsonify({
+                'response': response.choices[0].message.content
+            })
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500

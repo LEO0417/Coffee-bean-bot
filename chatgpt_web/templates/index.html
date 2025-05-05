@@ -73,6 +73,22 @@
             border-bottom: 1px solid rgba(0, 0, 0, 0.1);
         }
         
+        .model-settings {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .provider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .provider-container select {
+            max-width: 200px;
+        }
+        
         .model-container {
             display: flex;
             align-items: center;
@@ -286,6 +302,20 @@
             .message-group {
                 max-width: 90%;
             }
+            
+            .model-settings {
+                flex-direction: column;
+            }
+            
+            .provider-container,
+            .model-container {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .provider-container select {
+                max-width: 100%;
+            }
         }
     </style>
 </head>
@@ -297,18 +327,25 @@
         </div>
         
         <div class="settings-container">
-            <div class="model-container">
-                <label for="model" class="form-label">模型：</label>
-                <select class="form-select" id="model">
-                    <option value="gpt-4o">GPT-4o</option>
-                    <option value="gpt-4.1">GPT-4.1</option>
-                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                </select>
-                <button class="refresh-button" onclick="refreshModels()">
-                    <i class="fas fa-sync-alt"></i> 刷新
-                </button>
-                <div id="loading-indicator" class="loading" style="display: none;">
-                    <i class="fas fa-spinner"></i> 加载中
+            <div class="model-settings">
+                <div class="provider-container mb-3">
+                    <label for="provider" class="form-label">模型源：</label>
+                    <select class="form-select" id="provider" onchange="handleProviderChange()">
+                        <option value="openai">OpenAI</option>
+                        <option value="ollama">Ollama (本地)</option>
+                    </select>
+                </div>
+                <div class="model-container">
+                    <label for="model" class="form-label">模型：</label>
+                    <select class="form-select" id="model">
+                        <option value="">加载中...</option>
+                    </select>
+                    <button class="refresh-button" onclick="refreshModels()">
+                        <i class="fas fa-sync-alt"></i> 刷新
+                    </button>
+                    <div id="loading-indicator" class="loading" style="display: none;">
+                        <i class="fas fa-spinner"></i> 加载中
+                    </div>
                 </div>
             </div>
         </div>
@@ -336,23 +373,31 @@
             refreshModels();
         });
 
-        // 刷新模型列表
+        // 处理模型源变更
+        async function handleProviderChange() {
+            await refreshModels();
+        }
+
+        // 修改刷新模型列表函数
         async function refreshModels() {
             const loadingIndicator = document.getElementById('loading-indicator');
             const modelSelect = document.getElementById('model');
-            const currentModel = modelSelect.value; // 保存当前选择的模型
+            const provider = document.getElementById('provider').value;
+            const currentModel = modelSelect.value;
             
             try {
                 loadingIndicator.style.display = 'flex';
+                modelSelect.innerHTML = '<option value="">加载中...</option>';
                 
                 const response = await fetch('/get-models');
-                const models = await response.json();
+                const allModels = await response.json();
                 
                 if (response.ok) {
                     // 清空现有选项
                     modelSelect.innerHTML = '';
                     
                     let foundCurrentModel = false;
+                    const models = allModels[provider] || {};
                     
                     // 添加新的选项
                     Object.entries(models).forEach(([modelId, displayName]) => {
@@ -375,12 +420,13 @@
                     }
                     
                     // 添加成功提示
-                    showTemporaryToast("模型列表已更新");
-                } else if (models.error) {
-                    showTemporaryToast("获取模型列表失败：" + models.error);
+                    showTemporaryToast(`${provider === 'ollama' ? 'Ollama' : 'OpenAI'} 模型列表已更新`);
+                } else if (allModels.error) {
+                    showTemporaryToast("获取模型列表失败：" + allModels.error);
                 }
             } catch (error) {
                 showTemporaryToast("获取模型列表出错：" + error.message);
+                modelSelect.innerHTML = '<option value="">加载失败</option>';
             } finally {
                 loadingIndicator.style.display = 'none';
             }
@@ -415,17 +461,19 @@
             style.innerHTML = fadeOutKeyframes;
             document.head.appendChild(style);
             
-            // 3秒后移除
+            // 3 秒后移除
             setTimeout(() => {
                 document.body.removeChild(toast);
                 document.head.removeChild(style);
             }, 3000);
         }
 
+        // 修改发送消息函数
         async function sendMessage() {
             const userInput = document.getElementById('userInput');
             const message = userInput.value.trim();
             const model = document.getElementById('model').value;
+            const provider = document.getElementById('provider').value;
             
             if (!message || isTyping) return;
 
@@ -442,16 +490,19 @@
                     streamController.abort();
                 }
                 
-                // 创建新的AbortController
+                // 创建新的 AbortController
                 streamController = new AbortController();
                 
-                // 使用fetch API和流式处理
                 const response = await fetch('/chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ message, model }),
+                    body: JSON.stringify({ 
+                        message, 
+                        model,
+                        provider 
+                    }),
                     signal: streamController.signal
                 });
                 
@@ -468,7 +519,6 @@
                 if (data.error) {
                     addBotMessage("错误：" + data.error);
                 } else {
-                    // 流式输出模拟
                     lastBotMessage = data.response;
                     simulateTyping(data.response);
                 }
@@ -511,7 +561,7 @@
                     if (/[,.!?;:]/.test(message.charAt(index - 1))) {
                         delay = 200; // 标点符号后停顿长一点
                     } else if (index % 20 === 0) {
-                        delay = 100; // 每20个字符稍微停顿
+                        delay = 100; // 每 20 个字符稍微停顿
                     }
                     
                     setTimeout(addNextChar, delay);
