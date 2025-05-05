@@ -17,7 +17,7 @@ def create_desktop_shortcut():
     desktop_path = os.path.join(str(Path.home()), 'Desktop')
     
     # 创建桌面快捷方式
-    shortcut_path = os.path.join(desktop_path, '好日子咖啡豆AI助手.command')
+    shortcut_path = os.path.join(desktop_path, '好日子咖啡豆 AI 助手.command')
     
     # 创建软链接
     if os.path.exists(shortcut_path):

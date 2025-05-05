@@ -126,7 +126,9 @@ def chat():
 中午可以推荐提升工作效率的咖啡；
 下午可以推荐享受下午茶时光的咖啡；
 晚上则推荐低因的温和咖啡。"""
-        
+
+        # 注意：这里可以将 stream=True 参数添加到 API 调用以获得真正的流式响应
+        # 为了简单起见，我们目前保持非流式响应，让前端模拟流式效果
         response = client.chat.completions.create(
             model=model,
             messages=[
