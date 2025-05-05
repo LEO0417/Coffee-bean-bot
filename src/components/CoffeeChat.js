@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Input, Button, Card, Space, Select } from 'antd';
 import axios from 'axios';
+import './Time.css';
 
 const { TextArea } = Input;
 
@@ -10,11 +11,18 @@ function CoffeeChat({ darkMode }) {
   const [question, setQuestion] = useState('');
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [thinking, setThinking] = useState(false);
 
   const handleSend = async () => {
     if (!question.trim() || !apiKey.trim()) return;
 
+    // 添加用户问题到消息列表
+    setMessages(prev => [...prev, { role: 'user', content: question }]);
+    
+    // 显示思考中状态
+    setThinking(true);
     setLoading(true);
+    
     try {
       const response = await axios.post('http://localhost:5001/api/chat', {
         message: question,
@@ -22,13 +30,15 @@ function CoffeeChat({ darkMode }) {
         model: model
       });
 
-      setMessages(prev => [...prev, 
-        { role: 'user', content: question },
-        { role: 'assistant', content: response.data.response }
-      ]);
+      // 隐藏思考中状态，添加机器人回复
+      setThinking(false);
+      setMessages(prev => [...prev, { role: 'assistant', content: response.data.response }]);
       setQuestion('');
     } catch (error) {
       console.error('Error sending message:', error);
+      // 错误时也隐藏思考中状态
+      setThinking(false);
+      setMessages(prev => [...prev, { role: 'assistant', content: '抱歉，发生了错误，请稍后再试。' }]);
     } finally {
       setLoading(false);
     }
@@ -91,6 +101,34 @@ function CoffeeChat({ darkMode }) {
             </p>
           </Card>
         ))}
+        
+        {/* 思考中的动画 */}
+        {thinking && (
+          <Card
+            style={{
+              marginBottom: 10,
+              backgroundColor: darkMode ? '#141414' : '#fff',
+              borderColor: darkMode ? '#303030' : '#f0f0f0'
+            }}
+          >
+            <div style={{ 
+              margin: 0,
+              color: darkMode ? '#fff' : '#000',
+              display: 'flex',
+              alignItems: 'center'
+            }}>
+              <span style={{ marginRight: '10px' }}>答：</span>
+              <div className="thinking-container">
+                <span>正在思考中</span>
+                <div className="thinking-dots">
+                  <span className="thinking-dot"></span>
+                  <span className="thinking-dot"></span>
+                  <span className="thinking-dot"></span>
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
 
       <Space.Compact style={{ width: '100%' }}>

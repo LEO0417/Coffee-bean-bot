@@ -156,12 +156,21 @@ def chat():
 如果是早上，可以推荐清爽提神的咖啡；
 中午可以推荐提升工作效率的咖啡；
 下午可以推荐享受下午茶时光的咖啡；
-晚上则推荐低因的温和咖啡。"""
+晚上则推荐低因的温和咖啡。
+
+在回答用户问题时，你可以在<think>标签内分析和思考问题，这部分内容不会直接显示给用户。
+你的最终回答应该放在<think>标签之外，这部分会显示给用户。
+例如：
+<think>这里是思考过程...</think>
+这里是给用户的实际回答..."""
 
         if provider == ModelProvider.OLLAMA:
             # 使用 Ollama API
             response_text = chat_with_ollama(message, model, system_prompt)
-            return jsonify({'response': response_text})
+            
+            # 处理响应中的思考标签
+            cleaned_response = remove_think_tags(response_text)
+            return jsonify({'response': cleaned_response})
         else:
             # 使用 OpenAI API
             client = OpenAI(
@@ -176,13 +185,24 @@ def chat():
                     {"role": "user", "content": message}
                 ]
             )
-
+            
+            # 处理响应中的思考标签
+            response_text = response.choices[0].message.content
+            cleaned_response = remove_think_tags(response_text)
+            
             return jsonify({
-                'response': response.choices[0].message.content
+                'response': cleaned_response
             })
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+def remove_think_tags(text):
+    """移除文本中<think>标签内的内容"""
+    import re
+    # 使用正则表达式移除<think>标签及其内容
+    cleaned_text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
+    return cleaned_text.strip()
 
 @app.route('/text-to-speech', methods=['POST'])
 def text_to_speech():
