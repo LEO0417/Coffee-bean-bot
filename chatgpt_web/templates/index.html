@@ -8,9 +8,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         :root {
-            --bubble-user: #007AFF;      /* iMessage 蓝色 */
-            --bubble-bot: #E5E5EA;       /* iMessage 灰色 */
-            --bg-color: #F2F2F7;         /* iOS 背景色 */
+            --bubble-user: #E53935;      /* 红色替代蓝色 */
+            --bubble-bot: #F5F5F5;       /* 保持机器人气泡颜色 */
+            --bg-color: #FFF5F5;         /* 淡红色背景 */
             --text-color: #000000;
             --text-light: #FFFFFF;
             --animation-duration: 0.3s;
@@ -44,7 +44,7 @@
         
         .chat-header {
             padding: 15px 20px;
-            background-color: rgba(255, 255, 255, 0.8);
+            background-color: #E53935;
             backdrop-filter: blur(10px);
             border-bottom: 1px solid rgba(0, 0, 0, 0.1);
             position: sticky;
@@ -58,19 +58,19 @@
         .app-title {
             font-size: 20px;
             font-weight: 600;
-            color: var(--text-color);
+            color: white;
             margin: 0;
         }
         
         #datetime {
             font-size: 14px;
-            color: rgba(0, 0, 0, 0.6);
+            color: rgba(255, 255, 255, 0.8);
         }
         
         .settings-container {
             padding: 10px 20px;
-            background-color: rgba(255, 255, 255, 0.95);
-            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            background-color: #FFEBEE;
+            border-bottom: 1px solid rgba(229, 57, 53, 0.2);
         }
         
         .model-container {
@@ -103,7 +103,7 @@
         }
         
         .refresh-button:hover {
-            background-color: rgba(0, 122, 255, 0.1);
+            background-color: rgba(229, 57, 53, 0.1);
         }
         
         .refresh-button i {
@@ -137,6 +137,7 @@
             background-position: center;
             background-repeat: no-repeat;
             background-attachment: fixed;
+            background-color: var(--bg-color);
         }
         
         .message-group {
@@ -215,8 +216,8 @@
             padding: 15px;
             display: flex;
             align-items: center;
-            background-color: white;
-            border-top: 1px solid rgba(0, 0, 0, 0.1);
+            background-color: #FFEBEE;
+            border-top: 1px solid rgba(229, 57, 53, 0.2);
             position: sticky;
             bottom: 0;
             gap: 10px;
@@ -224,7 +225,7 @@
         
         .message-input {
             flex: 1;
-            border: 1px solid rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(229, 57, 53, 0.3);
             border-radius: 20px;
             padding: 10px 15px;
             font-size: 16px;
@@ -235,7 +236,7 @@
         .message-input:focus {
             outline: none;
             border-color: var(--bubble-user);
-            box-shadow: 0 0 0 1px rgba(0, 122, 255, 0.3);
+            box-shadow: 0 0 0 1px rgba(229, 57, 53, 0.3);
         }
         
         .control-button {
@@ -254,7 +255,7 @@
         }
         
         .control-button:hover {
-            background-color: rgba(0, 122, 255, 0.8);
+            background-color: rgba(229, 57, 53, 0.8);
         }
         
         .control-button:active {
@@ -262,7 +263,7 @@
         }
         
         .speak-button {
-            background-color: #FF9500; /* iOS orange */
+            background-color: #FF5252; /* 红色替代橙色 */
         }
         
         @keyframes fadeIn {
@@ -415,7 +416,7 @@
             style.innerHTML = fadeOutKeyframes;
             document.head.appendChild(style);
             
-            // 3秒后移除
+            // 3 秒后移除
             setTimeout(() => {
                 document.body.removeChild(toast);
                 document.head.removeChild(style);
@@ -442,10 +443,10 @@
                     streamController.abort();
                 }
                 
-                // 创建新的AbortController
+                // 创建新的 AbortController
                 streamController = new AbortController();
                 
-                // 使用fetch API和流式处理
+                // 使用 fetch API 和流式处理
                 const response = await fetch('/chat', {
                     method: 'POST',
                     headers: {
@@ -511,7 +512,7 @@
                     if (/[,.!?;:]/.test(message.charAt(index - 1))) {
                         delay = 200; // 标点符号后停顿长一点
                     } else if (index % 20 === 0) {
-                        delay = 100; // 每20个字符稍微停顿
+                        delay = 100; // 每 20 个字符稍微停顿
                     }
                     
                     setTimeout(addNextChar, delay);
