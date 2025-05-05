@@ -1,0 +1,10 @@
+.clock-icon {
+  margin-right: 8px;  /* 图标和时间之间的间距 */
+  color: #333;        /* 图标颜色 */
+  font-size: 24px;  /* 直接设置具体大小 */
+}
+
+.time-display {
+  display: flex;
+  align-items: center;
+} 
